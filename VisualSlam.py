@@ -7,12 +7,16 @@ class SLAM():
     def __init__(self,Cmat,image_dir):        
         self.camera_matrix = Cmat
         self.images = self._load_images(image_dir)
-        self.orb = cv2.ORB_create()
+        self.orb = cv2.ORB_create(1000)
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
         search_params = dict(checks=50)
         self.flann = cv2.FlannBasedMatcher(indexParams=index_params, searchParams=search_params)
-        
+        self.K = self.camera_matrix
+        print("K: {}".format(self.K))
+        self.P = np.append(self.K, np.zeros((3, 1)), axis=1)
+
+        print("P: {}".format(self.P))
         
         
     def _load_images(self, filepath):
@@ -31,7 +35,7 @@ class SLAM():
         return [cv2.imread(path, cv2.IMREAD_GRAYSCALE) for path in image_paths]
         
     
-    def _form_transf(R, t):
+    def _form_transf(self, R, t):
         """
         Makes a transformation matrix from the given rotation matrix and translation vector
 
@@ -49,7 +53,7 @@ class SLAM():
         T[:3, 3] = t
         return T
     
-    def get_matches(self, i):
+    def get_matches(self, img_now, img_prev):
         """
         This function detect and compute keypoints and descriptors from the i-1'th and i'th image using the class orb object
 
@@ -63,8 +67,11 @@ class SLAM():
         q2 (ndarray): The good keypoints matches position in i'th image
         """
         # Find the keypoints and descriptors with ORB
-        kp1, des1 = self.orb.detectAndCompute(self.images[i - 1], None)
-        kp2, des2 = self.orb.detectAndCompute(self.images[i], None)
+        # kp1, des1 = self.orb.detectAndCompute(self.images[i - 1], None)
+        # kp2, des2 = self.orb.detectAndCompute(self.images[i], None)
+        kp1, des1 = self.orb.detectAndCompute(img_prev, None)
+        kp2, des2 = self.orb.detectAndCompute(img_now, None)
+
         # Find matches
         matches = self.flann.knnMatch(des1, des2, k=2)
 
@@ -77,14 +84,14 @@ class SLAM():
         except ValueError:
             pass
 
-        draw_params = dict(matchColor = -1, # draw matches in green color
-                 singlePointColor = None,
-                 matchesMask = None, # draw only inliers
-                 flags = 2)
+        # draw_params = dict(matchColor = -1, # draw matches in green color
+        #          singlePointColor = None,
+        #          matchesMask = None, # draw only inliers
+        #          flags = 2)
 
-        img3 = cv2.drawMatches(self.images[i], kp1, self.images[i-1],kp2, good ,None,**draw_params)
+        # img3 = cv2.drawMatches(img_now, kp1, img_prev,kp2, good ,None,**draw_params)
         # cv2.imshow("image", img3)
-        # key = cv2.waitKey(200)
+        # key = cv2.waitKey(2)
         
         # # Check if the 'q' key is pressed (you can change 'q' to any key you prefer)
         # if key & 0xFF == ord('q'):
@@ -118,23 +125,23 @@ class SLAM():
         transformation_matrix = self._form_transf(R, np.squeeze(t))
         return transformation_matrix
     
-    def _form_transf(R, t):
-        """
-        Makes a transformation matrix from the given rotation matrix and translation vector
+    # def _form_transf(R, t):
+    #     """
+    #     Makes a transformation matrix from the given rotation matrix and translation vector
 
-        Parameters
-        ----------
-        R (ndarray): The rotation matrix
-        t (list): The translation vector
+    #     Parameters
+    #     ----------
+    #     R (ndarray): The rotation matrix
+    #     t (list): The translation vector
 
-        Returns
-        -------
-        T (ndarray): The transformation matrix
-        """
-        T = np.eye(4, dtype=np.float64)
-        T[:3, :3] = R
-        T[:3, 3] = t
-        return T
+    #     Returns
+    #     -------
+    #     T (ndarray): The transformation matrix
+    #     """
+    #     T = np.eye(4, dtype=np.float64)
+    #     T[:3, :3] = R
+    #     T[:3, 3] = t
+    #     return T
 
     def decomp_essential_mat(self, E, q1, q2):
         """

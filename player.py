@@ -20,6 +20,8 @@ class KeyboardPlayerPyGame(Player):
         os.makedirs(self.save_dir, exist_ok=True)  # Create directory if it doesn't exist
         self.last_save_time = time.time()  # Record the last time an image was saved
 
+        self.all_fpv = []
+
 
     def reset(self):
         self.fpv = None
@@ -38,8 +40,11 @@ class KeyboardPlayerPyGame(Player):
         }
         
     def pre_exploration(self) -> None:
-        self.Cmat = self.get_camera_intrinsic_matrix()
+        # self.Cmat = self.get_camera_intrinsic_matrix()
         # print(self.Cmat)
+        # self.slam = SLAM(self.Cmat, self.save_dir)
+        pass
+        
        
     def act(self):
         for event in pygame.event.get():
@@ -93,6 +98,16 @@ class KeyboardPlayerPyGame(Player):
         self.show_target_images()
 
     def see(self, fpv):
+        if self.get_state() is not None:
+            state = self.get_state()
+            step = state[2]
+            if step == 1:
+                print("First step - starting SLAM")
+                self.Cmat = self.get_camera_intrinsic_matrix()
+                # print(self.Cmat)
+                self.slam = SLAM(self.Cmat, self.save_dir)
+
+
         if fpv is None or len(fpv.shape) < 3:
             return
 
@@ -103,8 +118,9 @@ class KeyboardPlayerPyGame(Player):
         current_time = time.time()
         if current_time - self.last_save_time >= 0.05:
             # Save the FPV image to a file
-            filename = os.path.join(self.save_dir, f"image{self.image_counter}.png")
-            cv2.imwrite(filename, fpv)
+            # filename = os.path.join(self.save_dir, f"image{self.image_counter}.png")
+            # cv2.imwrite(filename, fpv)
+            self.all_fpv.append(fpv)
             self.image_counter += 1  # Increment the counter
             self.last_save_time = current_time  # Update the last save time
                    
@@ -112,12 +128,21 @@ class KeyboardPlayerPyGame(Player):
             h, w, _ = fpv.shape
             self.screen = pygame.display.set_mode((w, h))
             # Create an instance of the SLAM class
-        image_dir = r"C:\Users\ifeda\ROB-GY-Computer-Vision\vis_nav_player\saved_images"
+        # image_dir = r"C:\Users\ifeda\ROB-GY-Computer-Vision\vis_nav_player\saved_images"
         
-        slam = SLAM(self.Cmat, image_dir)
-        if self.image_counter > 1:
+        # self.Cmat = self.get_camera_intrinsic_matrix()
+        # print(self.Cmat)
+        
+        if self.image_counter > 2:
+            i = self.image_counter-1
             # Perform template matching on consecutive images
-            q1, q2 = slam.get_matches(self.image_counter - 1)
+            # q1, q2 = self.slam.get_matches(self.image_counter - 1)
+
+            img_now = self.all_fpv[i]
+            img_prev = self.all_fpv[i-1]
+            q1, q2 = self.slam.get_matches(img_now, img_prev)
+            t = self.slam.get_pose(q1, q2)
+            print("t: {}".format(t))
             
             # You can use q1 and q2 for further processing or SLAM-related tasks
         
