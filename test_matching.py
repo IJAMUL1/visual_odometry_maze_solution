@@ -5,8 +5,15 @@ import matplotlib
 import matplotlib.cm as cm
 import torch
 
+from tqdm import tqdm
+from plot_path import visualize_paths
+
 from SuperGluePretrainedNetwork.models.matching import Matching
 from SuperGluePretrainedNetwork.models.utils import frame2tensor, make_matching_plot_fast
+
+# ---------------------------------------------------------------------------
+# SLAM Class
+
 
 class SLAM():
     def __init__(self,Cmat):        
@@ -260,12 +267,22 @@ class SLAM():
         t = t * relative_scale
 
         return [R1, t]
-    
-    
 
+
+
+# Helper function to get integer from filename
 def extract_integer(filename):
     return int(filename.split('.')[0][5:])
 
+
+
+
+
+
+
+# ---------------------------------------------------------------------------
+# ORB / SIFT with SLAM
+# ---------------------------------------------------------------------------
 if 0:
     K = np.array([[ 92.0, 0.0,  160.0],
                 [  0.0, 92.0, 120.0],
@@ -299,7 +316,13 @@ if 0:
 
 
 
-if 1:
+
+
+
+# ---------------------------------------------------------------------------
+# SuperGlue with two images
+# ---------------------------------------------------------------------------
+if 0:
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     class Opt():
@@ -336,6 +359,7 @@ if 1:
     image_paths = [os.path.join(filepath, file) for file in sorted(os.listdir(filepath), key=extract_integer)]
     imgs = [cv2.imread(path, cv2.IMREAD_GRAYSCALE) for path in image_paths]
 
+    # img1 = imgs[5]
     img1 = imgs[100]
     img2 = imgs[103]
     frame1_tensor = frame2tensor(img1, device)
@@ -346,6 +370,8 @@ if 1:
     last_data['image0'] = frame1_tensor
     last_frame = img1
     last_image_id = 0
+
+    print("last_data:\n{}".format(last_data))
 
     pred = matching({**last_data, 'image1': frame2_tensor})
     kpts0 = last_data['keypoints0'][0].cpu().numpy()
@@ -390,10 +416,13 @@ if 1:
 
 
     # ----------------------------
-    idx = np.r_[0:1,15:16,25:26,30:31,40:41,50:51,60:61,70:71]
+    # idx = np.r_[0:1,15:16,25:26,30:31,40:41,50:51,60:61,70:71]
 
-    m0 = mkpts0[idx]
-    m1 = mkpts1[idx]
+    # m0 = mkpts0[idx]
+    # m1 = mkpts1[idx]
+
+    m0 = mkpts0
+    m1 = mkpts1
 
     out = make_matching_plot_fast(
         img1, img2, kpts0, kpts1, m0, m1, color, text,
@@ -411,3 +440,164 @@ if 1:
     
     # cv2.imshow("matches", out)
     # cv2.waitKey(0)
+
+
+
+
+
+
+
+
+
+
+# ---------------------------------------------------------------------------
+# SuperGlue on a sequence of images, with SLAM
+# ---------------------------------------------------------------------------
+
+if 1:
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    K = np.array([[ 92.0, 0.0,  160.0],
+                [  0.0, 92.0, 120.0],
+                [  0.0,  0.0,   1.0]])
+
+    slam = SLAM(K)
+    estimated_path = []
+    cur_pose = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
+
+    class Opt():
+        def __init__(self):
+            self.nms_radius = 4
+            self.keypoint_threshold = 0.005
+            self.max_keypoints = -1
+
+            self.superglue = 'indoor'
+            self.sinkhorn_iterations = 20
+            self.match_threshold = 0.2
+
+            self.show_keypoints = True
+
+    opt = Opt()
+
+    config = {
+        'superpoint': {
+            'nms_radius': opt.nms_radius,
+            'keypoint_threshold': opt.keypoint_threshold,
+            'max_keypoints': opt.max_keypoints
+        },
+        'superglue': {
+            'weights': opt.superglue,
+            'sinkhorn_iterations': opt.sinkhorn_iterations,
+            'match_threshold': opt.match_threshold,
+        }
+    }
+
+    matching = Matching(config).eval().to(device)
+    keys = ['keypoints', 'scores', 'descriptors']
+    filepath = "feature_test_images"
+    image_paths = [os.path.join(filepath, file) for file in sorted(os.listdir(filepath), key=extract_integer)]
+    imgs = [cv2.imread(path, cv2.IMREAD_GRAYSCALE) for path in image_paths]
+
+    imgs = imgs[56:106]
+
+    all_img_data = []
+    img_tensor_list = []
+
+
+    # -----------------------------------------------
+    # See function
+    # ---------------------------
+    #   Loop through images (as if playing video):
+    #       Get superpoint of image
+    #       if i > 0:
+    #           match [i] and [i-i]
+
+    img_count = 0
+
+    for i, img in enumerate(tqdm(imgs)):
+
+        if i < 1:
+            # Skip first few steps to avoid static images
+            continue
+        
+        # print("processing img: {}".format(img_count))
+        img_tensor = frame2tensor(img, device)
+        img_data = matching.superpoint({'image': img_tensor})
+
+        all_img_data.append(img_data)
+        img_tensor_list.append(img_tensor)
+
+        if img_count >= 1:
+            img_prev_data = {k+'0': all_img_data[img_count-1][k] for k in keys}
+            img_prev_data['image0'] = img_tensor_list[img_count-1]
+
+            img_now_data = {k+'1': img_data[k] for k in keys}
+            img_now_data['image1'] = img_tensor
+
+            d = {**img_prev_data, **img_now_data}
+
+            pred = matching({**img_prev_data, **img_now_data})
+            kpts0 = img_prev_data['keypoints0'][0].cpu().numpy()
+            kpts1 = img_now_data['keypoints1'][0].cpu().numpy()
+            matches = pred['matches0'][0].cpu().numpy()
+            confidence = pred['matching_scores0'][0].cpu().detach().numpy()
+
+            valid = matches > -1
+            mkpts0 = kpts0[valid]
+            mkpts1 = kpts1[matches[valid]]
+            color = cm.jet(confidence[valid])
+            text = [
+                'SuperGlue',
+                'Keypoints: {}:{}'.format(len(kpts0), len(kpts1)),
+                'Matches: {}'.format(len(mkpts0))
+            ]
+            k_thresh = matching.superpoint.config['keypoint_threshold']
+            m_thresh = matching.superglue.config['match_threshold']
+            small_text = [
+                'Keypoint Threshold: {:.4f}'.format(k_thresh),
+                'Match Threshold: {:.2f}'.format(m_thresh),
+                'Image Pair: {:06}:{:06}'.format(1, 2),
+            ]
+
+            # idx = np.r_[0:1,15:16,25:26,30:31,40:41,50:51,60:61,70:71]
+
+            # m0 = mkpts0[idx]
+            # m1 = mkpts1[idx]
+
+            # out = make_matching_plot_fast(
+            #     img, imgs[i-1], kpts0, kpts1, m0, m1, color, text,
+            #     path=None, show_keypoints=opt.show_keypoints, small_text=small_text)
+
+
+            # print("mkpts0: {}".format(mkpts0))
+            # print("kpts0: {}".format(kpts0))
+            # print("matches: {}".format(matches[valid]))
+
+            # cv2.imshow("matches", out)
+            # cv2.waitKey(0)
+
+            q1 = np.array(mkpts0)
+            q2 = np.array(mkpts1)
+
+            relative_pose  = slam.get_pose(q1, q2)
+            relative_pose = np.nan_to_num(relative_pose, neginf=0, posinf=0)
+
+            # print("curr pose:\n{}".format(cur_pose))
+            estimated_path.append((cur_pose[0,3], cur_pose[2,3]))
+            cur_pose = np.matmul(cur_pose, np.linalg.inv(relative_pose))
+
+            # print("relative pose:\n{}".format(relative_pose))
+
+
+
+        img_count += 1
+
+
+
+        # Stop after x frames
+        # if img_count == 5:
+        #     break
+
+
+    print("estimated_path:\n{}".format(estimated_path))
+    visualize_paths(estimated_path, "VO", file_out="VO.html")
