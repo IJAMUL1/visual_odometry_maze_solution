@@ -4,37 +4,17 @@ import numpy as np
 from tqdm import tqdm
 
 class SLAM():
-    def __init__(self,Cmat,image_dir):        
-        self.camera_matrix = Cmat
-        self.images = self._load_images(image_dir)
-        self.orb = cv2.ORB_create(1000)
+    def __init__(self,Cmat):        
+        # self.images = self._load_images(image_dir)
+        self.orb = cv2.ORB_create(3000)
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
         search_params = dict(checks=50)
         self.flann = cv2.FlannBasedMatcher(indexParams=index_params, searchParams=search_params)
-        self.K = self.camera_matrix
-        print("K: {}".format(self.K))
-        self.P = np.append(self.K, np.zeros((3, 1)), axis=1)
-
-        print("P: {}".format(self.P))
+        self.K = Cmat
+        # print("K: {}".format(self.K))
         
         
-    def _load_images(self, filepath):
-        """
-        Loads the images
-
-        Parameters
-        ----------
-        filepath (str): The file path to image dir
-
-        Returns
-        -------
-        images (list): grayscale images
-        """
-        image_paths = [os.path.join(filepath, file) for file in sorted(os.listdir(filepath))]
-        return [cv2.imread(path, cv2.IMREAD_GRAYSCALE) for path in image_paths]
-        
-    
     def _form_transf(self, R, t):
         """
         Makes a transformation matrix from the given rotation matrix and translation vector
@@ -79,23 +59,23 @@ class SLAM():
         good = []
         try:
             for m, n in matches:
-                if m.distance < 0.8 * n.distance:
+                if m.distance < 0.9 * n.distance:
                     good.append(m)
         except ValueError:
             pass
 
-        # draw_params = dict(matchColor = -1, # draw matches in green color
-        #          singlePointColor = None,
-        #          matchesMask = None, # draw only inliers
-        #          flags = 2)
+        draw_params = dict(matchColor = -1, # draw matches in green color
+                 singlePointColor = None,
+                 matchesMask = None, # draw only inliers
+                 flags = 2)
 
-        # img3 = cv2.drawMatches(img_now, kp1, img_prev,kp2, good ,None,**draw_params)
-        # cv2.imshow("image", img3)
-        # key = cv2.waitKey(2)
+        img3 = cv2.drawMatches(img_now, kp1, img_prev,kp2, good ,None,**draw_params)
+        cv2.imshow("image", img3)
+        key = cv2.waitKey(2)
         
-        # # Check if the 'q' key is pressed (you can change 'q' to any key you prefer)
-        # if key & 0xFF == ord('q'):
-        #     cv2.destroyAllWindows()  # Close the OpenCV window
+        # Check if the 'q' key is pressed (you can change 'q' to any key you prefer)
+        if key & 0xFF == ord('q'):
+            cv2.destroyAllWindows()  # Close the OpenCV window
 
         # Get the image points form the good matches
         q1 = np.float32([kp1[m.queryIdx].pt for m in good])
@@ -116,33 +96,17 @@ class SLAM():
         transformation_matrix (ndarray): The transformation matrix
         """
         # Essential matrix
-        E, _ = cv2.findEssentialMat(q1, q2, self.K, threshold=1)
+        E, _ = cv2.findEssentialMat(q1, q2, self.K, threshold=1)      # Adjust the threshold
 
         # Decompose the Essential matrix into R and t
+        self.P = np.column_stack((self.K, np.zeros((3, 1))))
+        # print("P: {}".format(self.P))
         R, t = self.decomp_essential_mat(E, q1, q2)
 
         # Get transformation matrix
         transformation_matrix = self._form_transf(R, np.squeeze(t))
         return transformation_matrix
     
-    # def _form_transf(R, t):
-    #     """
-    #     Makes a transformation matrix from the given rotation matrix and translation vector
-
-    #     Parameters
-    #     ----------
-    #     R (ndarray): The rotation matrix
-    #     t (list): The translation vector
-
-    #     Returns
-    #     -------
-    #     T (ndarray): The transformation matrix
-    #     """
-    #     T = np.eye(4, dtype=np.float64)
-    #     T[:3, :3] = R
-    #     T[:3, 3] = t
-    #     return T
-
     def decomp_essential_mat(self, E, q1, q2):
         """
         Decompose the Essential matrix
@@ -165,6 +129,7 @@ class SLAM():
 
             # Triangulate the 3D points
             hom_Q1 = cv2.triangulatePoints(self.P, P, q1.T, q2.T)
+            
             # Also seen from cam 2
             hom_Q2 = np.matmul(T, hom_Q1)
 
