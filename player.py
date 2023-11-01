@@ -1,12 +1,31 @@
-from vis_nav_game import Player, Action
 import pygame
 import cv2
 import os
 import time
 import numpy as np
-from VisualSlam import SLAM
+import torch
+
 import matplotlib.pyplot as plt
+
+from vis_nav_game import Player, Action
+
+from VisualSlam import SLAM
 from plot_path import visualize_paths
+
+from SuperGluePretrainedNetwork.models.matching import Matching
+from SuperGluePretrainedNetwork.models.utils import frame2tensor, make_matching_plot_fast
+
+class SuperOpt():
+    def __init__(self):
+        self.nms_radius = 4
+        self.keypoint_threshold = 0.005
+        self.max_keypoints = -1
+
+        self.superglue = 'indoor'
+        self.sinkhorn_iterations = 20
+        self.match_threshold = 0.2
+
+        self.show_keypoints = True
 
 
 class KeyboardPlayerPyGame(Player):
@@ -20,9 +39,32 @@ class KeyboardPlayerPyGame(Player):
         self.cur_pose = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
         super(KeyboardPlayerPyGame, self).__init__()
                 
-        self.image_counter = 0  # Add a counter for image filenames
+        self.img_count = 0  # Add a counter for image filenames
         self.last_save_time = time.time()  # Record the last time an image was saved
         self.all_fpv = []
+
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        self.super_opt = SuperOpt()
+
+        self.super_config = {
+            'superpoint': {
+                'nms_radius': self.super_opt.nms_radius,
+                'keypoint_threshold': self.super_opt.keypoint_threshold,
+                'max_keypoints': self.super_opt.max_keypoints
+            },
+            'superglue': {
+                'weights': self.super_opt.superglue,
+                'sinkhorn_iterations': self.super_opt.sinkhorn_iterations,
+                'match_threshold': self.super_opt.match_threshold,
+            }
+        }
+
+        self.matching = Matching(self.super_config).eval().to(self.device)
+        self.super_keys = ['keypoints', 'scores', 'descriptors']
+        self.all_img_data = []
+        self.img_tensor_list = []
+
 
     def reset(self):
         self.fpv = None
@@ -108,37 +150,86 @@ class KeyboardPlayerPyGame(Player):
         self.fpv = fpv        
 
         # Check if 0.5 seconds have passed since the last image was saved
-        current_time = time.time()
+        # current_time = time.time()
         
-        if current_time - self.last_save_time >= 0.01:
-            self.all_fpv.append(fpv) 
-            self.image_counter += 1  # Increment the counter
-            self.last_save_time = current_time  # Update the last save time
+        # if current_time - self.last_save_time >= 0.01:
+        #     self.all_fpv.append(fpv) 
+        #     self.img_count += 1  # Increment the counter
+        #     self.last_save_time = current_time  # Update the last save time
                    
         if self.screen is None:
             h, w, _ = fpv.shape
             self.screen = pygame.display.set_mode((w, h))
         
         
-        if self.image_counter > 1:
+        # if self.img_count > 1:
             
-            i = self.image_counter-1
+        #     i = self.img_count-1
             
-            # Perform template matching on consecutive images
-            img_now = self.all_fpv[i]
-            img_prev = self.all_fpv[i-1]      
+        #     # Perform template matching on consecutive images
+        #     img_now = self.all_fpv[i]
+        #     img_prev = self.all_fpv[i-1]      
             
-            q1, q2 = self.slam.get_matches(img_now, img_prev)
+        #     q1, q2 = self.slam.get_matches(img_now, img_prev)
             
-            if len(q1) >=5:
-                # print("Q1 lenght =",len(q1))
-                # print("Q2 length = ",len(q2))
-                relative_pose = self.slam.get_pose(q1,q2)
-                relative_pose = np.nan_to_num(relative_pose, neginf=0,posinf=0)
-                self.estimated_path.append((self.cur_pose[0, 3], self.cur_pose[2, 3]))
-                self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
-                print(self.estimated_path)            
-                    
+        #     if len(q1) >=5:
+        #         # print("Q1 lenght =",len(q1))
+        #         # print("Q2 length = ",len(q2))
+        #         relative_pose = self.slam.get_pose(q1,q2)
+        #         relative_pose = np.nan_to_num(relative_pose, neginf=0,posinf=0)
+        #         self.estimated_path.append((self.cur_pose[0, 3], self.cur_pose[2, 3]))
+        #         self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
+        #         print(self.estimated_path)            
+
+
+
+        # SuperGlue implementation
+        # -----------------------------------------------------
+        STEPSIZE = 1
+
+        state = self.get_state()
+        if state is not None:
+            step = state[2]
+
+            # if current_time - self.last_save_time >= 0.1:
+            if (step > 5) and ((step % STEPSIZE) == 0):
+                fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
+                img_tensor = frame2tensor(fpv_gray, self.device)
+                img_data = self.matching.superpoint({'image': img_tensor})
+
+                self.all_img_data.append(img_data)
+                self.img_tensor_list.append(img_tensor)
+
+                if self.img_count >= 1:
+                    img_prev_data = {k+'0':self.all_img_data[self.img_count-1][k] for k in self.super_keys}
+                    img_prev_data['image0'] = self.img_tensor_list[self.img_count-1]
+
+                    img_now_data = {k+'1': img_data[k] for k in self.super_keys}
+                    img_now_data['image1'] = img_tensor
+
+                    d = {**img_prev_data, **img_now_data}
+
+                    pred = self.matching({**img_prev_data, **img_now_data})
+                    kpts0 = img_prev_data['keypoints0'][0].cpu().numpy()
+                    kpts1 = img_now_data['keypoints1'][0].cpu().numpy()
+                    matches = pred['matches0'][0].cpu().numpy()
+                    confidence = pred['matching_scores0'][0].cpu().detach().numpy()
+
+                    valid = matches > -1
+                    mkpts0 = kpts0[valid]
+                    mkpts1 = kpts1[matches[valid]]
+
+                    q1 = np.array(mkpts0)
+                    q2 = np.array(mkpts1)
+
+                    relative_pose  = self.slam.get_pose(q1, q2)
+                    relative_pose = np.nan_to_num(relative_pose, neginf=0, posinf=0)
+
+                    # print("curr pose:\n{}".format(cur_pose))
+                    self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
+                    self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
+
+                self.img_count += 1
     
 
         def convert_opencv_img_to_pygame(opencv_image):
