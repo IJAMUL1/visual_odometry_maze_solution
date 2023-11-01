@@ -12,6 +12,7 @@ class SLAM():
         search_params = dict(checks=50)
         self.flann = cv2.FlannBasedMatcher(indexParams=index_params, searchParams=search_params)
         self.K = Cmat
+        self.first_process =  True
         # print("K: {}".format(self.K))
         
         
@@ -99,7 +100,9 @@ class SLAM():
         E, _ = cv2.findEssentialMat(q1, q2, self.K, threshold=1)      # Adjust the threshold
 
         # Decompose the Essential matrix into R and t
-        self.P = np.column_stack((self.K, np.zeros((3, 1))))
+        if self.first_process == True:
+            self.P = np.column_stack((self.K, np.zeros((3, 1))))
+            self.first_process = False
         # print("P: {}".format(self.P))
         R, t = self.decomp_essential_mat(E, q1, q2)
 
@@ -129,6 +132,7 @@ class SLAM():
 
             # Triangulate the 3D points
             hom_Q1 = cv2.triangulatePoints(self.P, P, q1.T, q2.T)
+            self.P = P
             
             # Also seen from cam 2
             hom_Q2 = np.matmul(T, hom_Q1)

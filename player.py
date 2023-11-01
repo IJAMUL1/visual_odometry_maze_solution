@@ -110,7 +110,7 @@ class KeyboardPlayerPyGame(Player):
         # Check if 0.5 seconds have passed since the last image was saved
         current_time = time.time()
         
-        if current_time - self.last_save_time >= 0.1:
+        if current_time - self.last_save_time >= 0.01:
             self.all_fpv.append(fpv) 
             self.image_counter += 1  # Increment the counter
             self.last_save_time = current_time  # Update the last save time
@@ -136,7 +136,8 @@ class KeyboardPlayerPyGame(Player):
                 relative_pose = self.slam.get_pose(q1,q2)
                 relative_pose = np.nan_to_num(relative_pose, neginf=0,posinf=0)
                 self.estimated_path.append((self.cur_pose[0, 3], self.cur_pose[2, 3]))
-                self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))            
+                self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
+                print(self.estimated_path)            
                     
     
 
