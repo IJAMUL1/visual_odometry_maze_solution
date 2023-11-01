@@ -15,6 +15,7 @@ from plot_path import visualize_paths
 from SuperGluePretrainedNetwork.models.matching import Matching
 from SuperGluePretrainedNetwork.models.utils import frame2tensor, make_matching_plot_fast
 
+# SuperPoint / SuperGlue options
 class SuperOpt():
     def __init__(self):
         self.nms_radius = 4
@@ -28,6 +29,7 @@ class SuperOpt():
         self.show_keypoints = True
 
 
+# Player class
 class KeyboardPlayerPyGame(Player):
     def __init__(self):
         self.fpv = None
@@ -86,6 +88,9 @@ class KeyboardPlayerPyGame(Player):
         self.Cmat = self.get_camera_intrinsic_matrix()
         # print(self.Cmat)
         self.slam = SLAM(self.Cmat)
+
+        # Save starting location
+        self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
        
     def act(self):
         for event in pygame.event.get():
@@ -185,7 +190,9 @@ class KeyboardPlayerPyGame(Player):
 
         # SuperGlue implementation
         # -----------------------------------------------------
-        STEPSIZE = 1
+        
+        # Interval for capturing / processing images
+        STEPSIZE = 3
 
         state = self.get_state()
         if state is not None:
@@ -213,7 +220,7 @@ class KeyboardPlayerPyGame(Player):
                     kpts0 = img_prev_data['keypoints0'][0].cpu().numpy()
                     kpts1 = img_now_data['keypoints1'][0].cpu().numpy()
                     matches = pred['matches0'][0].cpu().numpy()
-                    confidence = pred['matching_scores0'][0].cpu().detach().numpy()
+                    # confidence = pred['matching_scores0'][0].cpu().detach().numpy()
 
                     valid = matches > -1
                     mkpts0 = kpts0[valid]
@@ -225,9 +232,23 @@ class KeyboardPlayerPyGame(Player):
                     relative_pose  = self.slam.get_pose(q1, q2)
                     relative_pose = np.nan_to_num(relative_pose, neginf=0, posinf=0)
 
-                    # print("curr pose:\n{}".format(cur_pose))
-                    self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
+                    # Save last x,z coordinates
+                    prev_xz = (self.cur_pose[0,3], self.cur_pose[2,3])
+
+                    # Calculate new pose from relative pose (transformation matrix)
                     self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
+                    # print("curr pose:\n{}".format(cur_pose))
+
+
+                    # If not moving forward or backward, ignore the translation vector
+                    # Translation vector seems to be normalized to 1 from decomposeEssentialMat()
+                    # See: https://answers.opencv.org/question/66839/units-of-rotation-and-translation-from-essential-matrix/
+                    if (self.last_act == Action.LEFT) or (self.last_act == Action.RIGHT):
+                        self.cur_pose[0,3] = prev_xz[0]
+                        self.cur_pose[2,3] = prev_xz[1]
+                        
+                    # Save current location
+                    self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
 
                 self.img_count += 1
     

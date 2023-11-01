@@ -132,7 +132,7 @@ class SLAM():
 
             # Triangulate the 3D points
             hom_Q1 = cv2.triangulatePoints(self.P, P, q1.T, q2.T)
-            self.P = P
+            # self.P = P
             
             # Also seen from cam 2
             hom_Q2 = np.matmul(T, hom_Q1)
