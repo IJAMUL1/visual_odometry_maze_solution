@@ -2,6 +2,7 @@ import pygame
 import cv2
 import os
 import time
+import math
 import numpy as np
 import torch
 
@@ -44,7 +45,7 @@ class KeyboardPlayerPyGame(Player):
         self.keymap = None
         self.relative_poses = [] 
         self.estimated_path = []
-        self.cur_pose = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
+        self.cur_pose = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], dtype=np.float16)
         super(KeyboardPlayerPyGame, self).__init__()
                 
         self.img_idx = 0  # Add a counter for image filenames
@@ -78,7 +79,15 @@ class KeyboardPlayerPyGame(Player):
         self.starting_step = START_STEP
         self.step_size = STEP_SIZE
 
+        # self.tick_turn_rad = 0.042454
+        self.tick_turn_rad = 0.0426
+
         self.orb = cv2.ORB.create(1000)
+
+        self.r = 0
+        self.theta = 0
+
+        self.prev_reck_act = None
 
 
     def reset(self):
@@ -154,10 +163,55 @@ class KeyboardPlayerPyGame(Player):
         cv2.imshow(f'KeyboardPlayer:target_images', concat_img)
         cv2.waitKey(1)
 
+
     def set_target_images(self, images):
         super(KeyboardPlayerPyGame, self).set_target_images(images)
         self.show_target_images()
         
+
+    # Find pose via dead reckoning
+    # Use polar coordinates to calculate vector from previous position to current position
+    def find_pose_dead_reck(self):
+        # If moving forward or backward, r = 1 (radius)
+        if Action.FORWARD in self.last_act:
+            self.r = 1
+            self.prev_reck_act = Action.FORWARD
+        elif Action.BACKWARD in self.last_act:
+            self.r = -1
+            self.prev_reck_act = Action.BACKWARD
+        else:
+            self.r = 0
+
+        # If moving left or right, theta = 1 (angle)
+        if Action.LEFT in self.last_act:
+            self.theta = self.theta + self.tick_turn_rad
+            self.prev_reck_act = Action.LEFT
+        elif Action.RIGHT in self.last_act:
+            # self.r = 0
+            self.theta = self.theta - self.tick_turn_rad
+            self.prev_reck_act = Action.RIGHT
+        else:
+            pass
+
+        # Constrain theta between 0 and 2pi
+        if self.theta >= (2 * math.pi):
+            self.theta = self.theta - (2 * math.pi)
+        elif self.theta < 0:
+            self.theta = (2 * math.pi) + self.theta
+
+        # Calculate x,y coordinates from r,theta
+        x = self.r * math.cos(self.theta)
+        y = self.r * math.sin(self.theta)
+
+        # Update current pose (add vector to current pose)
+        self.cur_pose[0,3] = self.cur_pose[0,3] + x
+        self.cur_pose[2,3] = self.cur_pose[2,3] + y
+
+        # print("r: {}, theta: {}, x: {}, y: {}, posex: {}, posey: {}".format(self.r, self.theta, x, y, self.cur_pose[0,3], self.cur_pose[2,3]))
+
+        # Save current location
+        self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
+
 
     # Find feature points using SuperPoint
     def find_feature_points_superpoint(self, img):
@@ -268,6 +322,9 @@ class KeyboardPlayerPyGame(Player):
             h, w, _ = fpv.shape
             self.screen = pygame.display.set_mode((w, h))
        
+        # Find pose via dead reckoning
+        # self.find_pose_dead_reck()
+
         # Process image: find feature points, match feature points, get pose
         # ret = self.process_image(fpv)
 
@@ -318,7 +375,7 @@ class KeyboardPlayerPyGame(Player):
                         q1 = np.array(mkpts0)
                         q2 = np.array(mkpts1)
 
-                        relative_pose  = self.slam.get_pose(q1, q2)
+                        relative_pose = self.slam.get_pose(q1, q2)
                         relative_pose = np.nan_to_num(relative_pose, neginf=0, posinf=0)
 
                         # Save last x,z coordinates
