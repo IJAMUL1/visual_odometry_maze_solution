@@ -17,7 +17,7 @@ from SuperGluePretrainedNetwork.models.matching import Matching
 from SuperGluePretrainedNetwork.models.utils import frame2tensor, make_matching_plot_fast
 
 START_STEP = 5
-STEP_SIZE = 4
+STEP_SIZE = 2
 
 
 
@@ -258,7 +258,14 @@ class KeyboardPlayerPyGame(Player):
     def find_pose(self, q1, q2):
         # Get pose from SLAM class
         relative_pose  = self.slam.get_pose(q1, q2)
+        if self.last_act == Action.FORWARD or self.last_act == Action.BACKWARD:
+            relative_pose[:,:3] = 1
+        elif self.last_act == Action.LEFT or self.last_act == Action.RIGHT:
+            relative_pose[:,3] = 1
+        elif self.last_act == Action.IDLE:
+            relative_pose[:,:] = 1
         relative_pose = np.nan_to_num(relative_pose, neginf=0, posinf=0)
+        
 
         # Save last x,z coordinates
         prev_xz = (self.cur_pose[0,3], self.cur_pose[2,3])
@@ -289,6 +296,10 @@ class KeyboardPlayerPyGame(Player):
         
         step = state[2]
 
+        if self.last_action == Action.IDLE:
+            pass
+        
+        
         # If past starting step (to avoid static) and on a set interval (self.step_size)
         if (step > self.starting_step) and ((step % self.step_size) == 0):
             fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
