@@ -270,6 +270,7 @@ class KeyboardPlayerPyGame(Player):
 
         # Save last x,z coordinates
         prev_xz = (self.cur_pose[0,3], self.cur_pose[2,3])
+        prev_rot = self.cur_pose[:3,:3]
 
         # Calculate new pose from relative pose (transformation matrix)
         self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
@@ -282,6 +283,8 @@ class KeyboardPlayerPyGame(Player):
         if (self.last_act != Action.FORWARD) and (self.last_act != Action.BACKWARD):
             self.cur_pose[0,3] = prev_xz[0]
             self.cur_pose[2,3] = prev_xz[1]
+        if (self.last_act != Action.LEFT) and (self.last_act != Action.RIGHT):
+            self.cur_pose[:3,:3] = prev_rot
             
         # Save current location
         self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
