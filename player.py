@@ -259,7 +259,8 @@ class KeyboardPlayerPyGame(Player):
         # Get pose from SLAM class
         relative_pose  = self.slam.get_pose(q1, q2)
         if self.last_act == Action.FORWARD or self.last_act == Action.BACKWARD:
-            relative_pose[:,:3] = 1
+            # relative_pose[:,:3] = 1
+            pass
         elif self.last_act == Action.LEFT or self.last_act == Action.RIGHT:
             relative_pose[:,3] = 1
         elif self.last_act == Action.IDLE:
@@ -296,8 +297,8 @@ class KeyboardPlayerPyGame(Player):
         
         step = state[2]
 
-        if self.last_action == Action.IDLE:
-            pass
+        if self.last_act == Action.IDLE:
+            return True
         
         
         # If past starting step (to avoid static) and on a set interval (self.step_size)
@@ -337,83 +338,7 @@ class KeyboardPlayerPyGame(Player):
         # self.find_pose_dead_reck()
 
         # Process image: find feature points, match feature points, get pose
-        # ret = self.process_image(fpv)
-
-
-        # ************************************
-        #      SAVE THIS STUFF BELOW
-        # ************************************
-        
-        # SuperGlue implementation
-        # -----------------------------------------------------
-        # BEGIN IF 0
-        if 1:
-            # Interval for capturing / processing images
-            STEPSIZE = 4
-
-            state = self.get_state()
-            if state is not None:
-                step = state[2]
-
-                # if current_time - self.last_save_time >= 0.1:
-                if (step > 5) and ((step % STEPSIZE) == 0):
-                    fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
-                    img_tensor = frame2tensor(fpv_gray, self.device)
-                    img_data = self.matching.superpoint({'image': img_tensor})
-
-                    self.img_data_list.append(img_data)
-                    self.img_tensor_list.append(img_tensor)
-
-                    if self.img_idx >= 1:
-                        img_prev_data = {k+'0':self.img_data_list[self.img_idx-1][k] for k in self.super_keys}
-                        img_prev_data['image0'] = self.img_tensor_list[self.img_idx-1]
-
-                        img_now_data = {k+'1': img_data[k] for k in self.super_keys}
-                        img_now_data['image1'] = img_tensor
-
-                        # d = {**img_prev_data, **img_now_data}
-
-                        pred = self.matching({**img_prev_data, **img_now_data})
-                        kpts0 = img_prev_data['keypoints0'][0].cpu().numpy()
-                        kpts1 = img_now_data['keypoints1'][0].cpu().numpy()
-                        matches = pred['matches0'][0].cpu().numpy()
-                        # confidence = pred['matching_scores0'][0].cpu().detach().numpy()
-
-                        valid = matches > -1
-                        mkpts0 = kpts0[valid]
-                        mkpts1 = kpts1[matches[valid]]
-
-                        q1 = np.array(mkpts0)
-                        q2 = np.array(mkpts1)
-
-                        relative_pose = self.slam.get_pose(q1, q2)
-                        relative_pose = np.nan_to_num(relative_pose, neginf=0, posinf=0)
-
-                        # Save last x,z coordinates
-                        prev_xz = (self.cur_pose[0,3], self.cur_pose[2,3])
-
-                        # Calculate new pose from relative pose (transformation matrix)
-                        self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
-                        # print("curr pose:\n{}".format(cur_pose))
-
-
-                        # If not moving forward or backward, ignore the translation vector
-                        # Translation vector seems to be normalized to 1 from decomposeEssentialMat()
-                        # See: https://answers.opencv.org/question/66839/units-of-rotation-and-translation-from-essential-matrix/
-                        if (self.last_act != Action.FORWARD) and (self.last_act != Action.BACKWARD):
-                            self.cur_pose[0,3] = prev_xz[0]
-                            self.cur_pose[2,3] = prev_xz[1]
-                            
-                        # Save current location
-                        self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
-
-                    # Update counters and previous data
-                    self.img_idx += 1
-        # END IF 0
-
-
-
-
+        ret = self.process_image(fpv)
     
 
         def convert_opencv_img_to_pygame(opencv_image):
@@ -432,27 +357,6 @@ class KeyboardPlayerPyGame(Player):
         rgb = convert_opencv_img_to_pygame(fpv)
         self.screen.blit(rgb, (0, 0))
         pygame.display.update()
-       
-    # def visualize_path(self):
-    #     if len(self.relative_poses) > 0:
-    #         initial_pose = np.eye(4)  # Identity matrix representing the initial pose
-    #         camera_poses = [initial_pose]  # List to store camera poses
-    #         for relative_pose in self.relative_poses:
-    #             # Accumulate poses
-    #             current_pose = np.dot(camera_poses[-1], relative_pose)
-    #             camera_poses.append(current_pose)
-
-    #         # Extract x and z positions from camera poses for a 2D path map
-    #         x_positions = [pose[0, 3] for pose in camera_poses]
-    #         z_positions = [pose[2, 3] for pose in camera_poses]
-
-    #         # Plot the path map
-    #         plt.plot(x_positions, z_positions, marker='o', linestyle='-')
-    #         plt.xlabel('X Position')
-    #         plt.ylabel('Z Position')
-    #         plt.title('Camera Path Map')
-    #         plt.grid()
-    #         plt.show()
 
 
 if __name__ == "__main__":
