@@ -82,7 +82,7 @@ class KeyboardPlayerPyGame(Player):
         # self.tick_turn_rad = 0.042454
         self.tick_turn_rad = 0.0426
 
-        self.orb = cv2.ORB.create(1000)
+        self.orb = cv2.ORB.create(3000)
 
         self.r = 0
         self.theta = 0
@@ -245,6 +245,7 @@ class KeyboardPlayerPyGame(Player):
         # Get matching points (q1 for img1, q2 for img2)
         q1 = np.array(mkpts0)
         q2 = np.array(mkpts1)
+        
 
         return q1, q2
 
@@ -255,14 +256,23 @@ class KeyboardPlayerPyGame(Player):
         relative_pose  = self.slam.get_pose(q1, q2)
         if self.last_act == Action.FORWARD or self.last_act == Action.BACKWARD:
             # relative_pose[:,:3] = 1
+            relative_pose[:3,:3] = np.eye(3)
             pass
         elif self.last_act == Action.LEFT or self.last_act == Action.RIGHT:
-            relative_pose[:,3] = 1
+            relative_pose[:,3] = [0,0,0,1]
         elif self.last_act == Action.IDLE:
-            relative_pose[:,:] = 1
+            relative_pose[:,:] = np.eye(4)
         relative_pose = np.nan_to_num(relative_pose, neginf=0, posinf=0)
+        print(relative_pose[0,3],relative_pose[2,3])
         
-
+        # if abs(self.cur_pose[2,3]) > 2*abs(self.cur_pose[0,3]):
+        #     # Set x-coordinate to 0 if y-coordinate is significantly greater
+        #     self.estimated_path.append((0, self.cur_pose[2,3]))
+        # elif abs(self.cur_pose[0,3]) > 2*abs(self.cur_pose[2,3]):
+        #     self.estimated_path.append((self.cur_pose[0,3],0))
+        # else:
+        #     self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
+        
         # Save last x,z coordinates
         prev_xz = (self.cur_pose[0,3], self.cur_pose[2,3])
         prev_rot = self.cur_pose[:3,:3]
@@ -280,9 +290,11 @@ class KeyboardPlayerPyGame(Player):
             self.cur_pose[2,3] = prev_xz[1]
         if (self.last_act != Action.LEFT) and (self.last_act != Action.RIGHT):
             self.cur_pose[:3,:3] = prev_rot
-            
+        
+        
         # Save current location
         self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
+        # print(self.estimate)
 
         return self.cur_pose
 
@@ -371,8 +383,8 @@ class KeyboardPlayerPyGame(Player):
                 if key & 0xFF == ord('q'):
                     cv2.destroyAllWindows()  # Close the OpenCV window
                 
-
-                pose = self.find_pose(q1, q2)
+                if(len(q1)>=5):
+                    pose = self.find_pose(q1, q2)
 
             # Increment index of processed images
             self.img_idx += 1
