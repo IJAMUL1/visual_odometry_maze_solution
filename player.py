@@ -224,11 +224,6 @@ class KeyboardPlayerPyGame(Player):
         return img_data['keypoints'], img_data['descriptors']
 
 
-    # Find feature points using ORB
-    def find_feature_points_orb(self, img):
-        pass
-
-
     # Find feature matches using SuperGlue
     def find_feature_matches_superglue(self, img1_index, img2_index):
         img1_data = {k+'0':self.img_data_list[img1_index][k] for k in self.super_keys}
@@ -293,7 +288,7 @@ class KeyboardPlayerPyGame(Player):
 
 
     # Process image
-    def process_image(self, fpv):
+    def process_image_super_glue(self, fpv):
         state = self.get_state()
         if state is None:
             return None
@@ -323,6 +318,66 @@ class KeyboardPlayerPyGame(Player):
             self.img_idx += 1
 
         return True
+    
+    
+    # Find feature points using SuperPoint___delete this soon
+    def find_feature_points_superpoint(self, img):
+        img_tensor = frame2tensor(img, self.device)
+        img_data = self.matching.superpoint({'image': img_tensor})
+
+        self.img_data_list.append(img_data)
+        self.img_tensor_list.append(img_tensor)
+
+        return img_data['keypoints'], img_data['descriptors']
+    
+    
+     
+    # Process image
+    def process_image_orb(self, fpv):
+        state = self.get_state()
+        if state is None:
+            return None
+        
+        step = state[2]
+
+        if self.last_act == Action.IDLE:
+            return True
+        
+        
+        # If past starting step (to avoid static) and on a set interval (self.step_size)
+        if (step > self.starting_step) and ((step % self.step_size) == 0):
+            # fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
+            self.img_data_list.append(fpv)
+            
+            # If more than one image processed (index >= 1)
+            if self.img_idx >= 1:
+
+                # Find feature matches between prev processed image and current image
+                # Find feature points
+                img_now = self.img_data_list[self.img_idx]
+                img_prev = self.img_data_list[self.img_idx-1]
+                kp1,kp2,des1,des2 = self.slam.find_feature_points(img_now,img_prev)
+                q1,q2,good = self.slam.get_matches(kp1,kp2,des1,des2)
+                draw_params = dict(matchColor = -1, # draw matches in green color
+                 singlePointColor = None,
+                 matchesMask = None, # draw only inliers
+                 flags = 2)
+
+                img3 = cv2.drawMatches(img_now, kp1, img_prev,kp2, good ,None,**draw_params)
+                cv2.imshow("image", img3)
+                key = cv2.waitKey(2)
+        
+                # Check if the 'q' key is pressed (you can change 'q' to any key you prefer)
+                if key & 0xFF == ord('q'):
+                    cv2.destroyAllWindows()  # Close the OpenCV window
+                
+
+                pose = self.find_pose(q1, q2)
+
+            # Increment index of processed images
+            self.img_idx += 1
+
+        return True
 
 
     # See (function used by game)
@@ -341,7 +396,10 @@ class KeyboardPlayerPyGame(Player):
         # self.find_pose_dead_reck()
 
         # Process image: find feature points, match feature points, get pose
-        ret = self.process_image(fpv)
+        # ret = self.process_image_super_glue(fpv)
+        
+        ret = self.process_image_orb(fpv)
+        
     
 
         def convert_opencv_img_to_pygame(opencv_image):

@@ -34,7 +34,17 @@ class SLAM():
         T[:3, 3] = t
         return T
     
-    def get_matches(self, img_now, img_prev):
+    
+    def find_feature_points(self,img_now,img_prev):
+        # Find the keypoints and descriptors with ORB
+        # kp1, des1 = self.orb.detectAndCompute(self.images[i - 1], None)
+        # kp2, des2 = self.orb.detectAndCompute(self.images[i], None)
+        kp1, des1 = self.orb.detectAndCompute(img_prev, None)
+        kp2, des2 = self.orb.detectAndCompute(img_now, None)
+        return kp1,kp2,des1,des2
+        
+    
+    def get_matches(self, kp1,kp2,des1,des2):
         """
         This function detect and compute keypoints and descriptors from the i-1'th and i'th image using the class orb object
 
@@ -47,11 +57,7 @@ class SLAM():
         q1 (ndarray): The good keypoints matches position in i-1'th image
         q2 (ndarray): The good keypoints matches position in i'th image
         """
-        # Find the keypoints and descriptors with ORB
-        # kp1, des1 = self.orb.detectAndCompute(self.images[i - 1], None)
-        # kp2, des2 = self.orb.detectAndCompute(self.images[i], None)
-        kp1, des1 = self.orb.detectAndCompute(img_prev, None)
-        kp2, des2 = self.orb.detectAndCompute(img_now, None)
+        
 
         # Find matches
         matches = self.flann.knnMatch(des1, des2, k=2)
@@ -65,23 +71,23 @@ class SLAM():
         except ValueError:
             pass
 
-        draw_params = dict(matchColor = -1, # draw matches in green color
-                 singlePointColor = None,
-                 matchesMask = None, # draw only inliers
-                 flags = 2)
+        # draw_params = dict(matchColor = -1, # draw matches in green color
+        #          singlePointColor = None,
+        #          matchesMask = None, # draw only inliers
+        #          flags = 2)
 
-        img3 = cv2.drawMatches(img_now, kp1, img_prev,kp2, good ,None,**draw_params)
-        cv2.imshow("image", img3)
-        key = cv2.waitKey(2)
+        # img3 = cv2.drawMatches(img_now, kp1, img_prev,kp2, good ,None,**draw_params)
+        # cv2.imshow("image", img3)
+        # key = cv2.waitKey(2)
         
-        # Check if the 'q' key is pressed (you can change 'q' to any key you prefer)
-        if key & 0xFF == ord('q'):
-            cv2.destroyAllWindows()  # Close the OpenCV window
+        # # Check if the 'q' key is pressed (you can change 'q' to any key you prefer)
+        # if key & 0xFF == ord('q'):
+        #     cv2.destroyAllWindows()  # Close the OpenCV window
 
         # Get the image points form the good matches
         q1 = np.float32([kp1[m.queryIdx].pt for m in good])
         q2 = np.float32([kp2[m.trainIdx].pt for m in good])
-        return q1, q2
+        return q1, q2, good
     
     def get_pose(self, q1, q2):
         """
