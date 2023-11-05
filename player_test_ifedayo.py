@@ -17,7 +17,7 @@ from SuperGluePretrainedNetwork.models.matching import Matching
 from SuperGluePretrainedNetwork.models.utils import frame2tensor, make_matching_plot_fast
 
 START_STEP = 5
-STEP_SIZE = 1
+STEP_SIZE = 2
 
 
 
@@ -32,6 +32,7 @@ class SuperOpt():
         self.superglue = 'indoor'
         self.sinkhorn_iterations = 20
         self.match_threshold = 0.3
+        
 
         # self.show_keypoints = False
 
@@ -159,15 +160,14 @@ class KeyboardPlayerPyGame(Player):
         cv2.putText(concat_img, 'Right View', (int(h/2) + h_offset, w_offset), font, size, color, stroke, line)
         cv2.putText(concat_img, 'Back View', (h_offset, int(w/2) + w_offset), font, size, color, stroke, line)
         cv2.putText(concat_img, 'Left View', (int(h/2) + h_offset, int(w/2) + w_offset), font, size, color, stroke, line)
-        # data_dir = r"C:\Users\ifeda\ROB-GY-Computer-Vision\vis_nav_player"
-        visualize_paths(self.estimated_path, "Visual Odometry",file_out="VO.html")
         
+        visualize_paths(self.estimated_path, "Visual Odometry",file_out="VO.html")
+                
         cv2.imshow(f'KeyboardPlayer:target_images', concat_img)
         cv2.waitKey(1)
-        # print(self.estimated_path)
+        quit()
+    
         
-
-
     def set_target_images(self, images):
         super(KeyboardPlayerPyGame, self).set_target_images(images)
         self.show_target_images()
@@ -215,6 +215,7 @@ class KeyboardPlayerPyGame(Player):
 
         # Save current location
         self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
+        print(self.estimated_path)
 
 
     # Find feature points using SuperPoint
@@ -261,44 +262,49 @@ class KeyboardPlayerPyGame(Player):
         if self.last_act == Action.FORWARD or self.last_act == Action.BACKWARD:
             # relative_pose[:,:3] = 1
             relative_pose[:3,:3] = np.eye(3)
+            # self.prev_angle = 0
+            self.cum_turned_angle =0
             pass
         elif self.last_act == Action.LEFT or self.last_act == Action.RIGHT:
             relative_pose[:,3] = [0,0,0,1]
         elif self.last_act == Action.IDLE:
             relative_pose[:,:] = np.eye(4)
-            
         relative_pose = np.nan_to_num(relative_pose, neginf=0, posinf=0)
-          
+                
         # Save last x,z coordinates
         prev_xz = (self.cur_pose[0,3], self.cur_pose[2,3])
         prev_rot = self.cur_pose[:3,:3]
 
+        
         # Calculate new pose from relative pose (transformation matrix)
         self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
         
-        # print("curr pose:\n{}".format(cur_pose))
-
-        # rotation_matrix = self.cur_pose[:3, :3]
+        
+        #Deleting soon
+        # print("curr pose:\n{}".format(self.cur_pose))
+        # Extract the 3x3 rotation matrix (top-left corner)
+        rotation_matrix = self.cur_pose[:3, :3]
 
         # Calculate the rotation about the y-axis (pitch) using the arctan2 function
         # pitch = np.arctan2(rotation_matrix[2, 0], np.sqrt(rotation_matrix[0, 0] ** 2 + rotation_matrix[1, 0] ** 2))
         
         # Calculate the rotation about the y-axis (pitch) in radians using the arctan2 function
+        pitch = np.arctan2(rotation_matrix[2, 0], np.sqrt(rotation_matrix[0, 0] ** 2 + rotation_matrix[1, 0] ** 2))
+
         # Convert to degrees if needed
-        # yaw = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
-        # yaw_degrees = np.degrees(yaw)
-        # turned_angle = self.prev_angle - yaw_degrees
-        # # turned_angle = self.prev_angle - pitch_degrees
-        # self.cum_turned_angle += turned_angle
+        pitch_degrees = np.degrees(pitch)
+        turned_angle = self.prev_angle - pitch_degrees
+        self.cum_turned_angle += turned_angle
         
-        # print("cum angle", self.cum_turned_angle)
-        # print("cum angle", self.cum_turned_angle)
-        # print("cum angle", self.cum_turned_angle)
-        # print("cum angle", self.cum_turned_angle)
-        
-        
-        # self.prev_angle = yaw_degrees       
-        # self.prev_angle = pitch_degrees
+        print("cum angle", self.cum_turned_angle)
+        print("cum angle", self.cum_turned_angle)
+        print("cum angle", self.cum_turned_angle)
+        print("cum angle", self.cum_turned_angle)
+       
+        self.prev_angle = pitch_degrees
+
+        # print("Rotation about the y-axis (pitch) in radians:", pitch)
+                       
         # If not moving forward or backward, ignore the translation vector
         # Translation vector seems to be normalized to 1 from decomposeEssentialMat()
         # See: https://answers.opencv.org/question/66839/units-of-rotation-and-translation-from-essential-matrix/
@@ -308,34 +314,14 @@ class KeyboardPlayerPyGame(Player):
         if (self.last_act != Action.LEFT) and (self.last_act != Action.RIGHT):
             self.cur_pose[:3,:3] = prev_rot
         
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        
-        
-        
-        x_diff = self.cur_pose[0,3]-prev_xz[0]
-        y_diff = self.cur_pose[2,3]-prev_xz[1]
-        
-        if abs(x_diff) > abs(y_diff):
-        # If the difference on the x-axis is greater, only update the x-axis position
-            self.cur_pose[2, 3] = prev_xz[1]
-        else:
-        # If the difference on the y-axis is greater or equal, only update the y-axis position
-            self.cur_pose[0, 3] = prev_xz[0]
-            
-            
         # Save current location
+        # print(self.cur_pose[0,3],self.cur_pose[2,3])
         self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
-        # print(self.estimate)
+        # print(self.estimated_path)
 
         return self.cur_pose
 
+    
 
     # Process image
     def process_image_super_glue(self, fpv):
@@ -396,36 +382,34 @@ class KeyboardPlayerPyGame(Player):
         
         # If past starting step (to avoid static) and on a set interval (self.step_size)
         if (step > self.starting_step) and ((step % self.step_size) == 0):
-            fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
-            alpha = 2.0
-            beta = 0.0
-            fpv_gray = cv2.convertScaleAbs(fpv_gray, alpha=alpha, beta=beta)
-            self.img_data_list.append(fpv_gray)
+            # fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
+            self.img_data_list.append(fpv)
             
             # If more than one image processed (index >= 1)
             if self.img_idx >= 1:
 
                 # Find feature matches between prev processed image and current image
                 # Find feature points
-                
                 img_now = self.img_data_list[self.img_idx]
                 img_prev = self.img_data_list[self.img_idx-1]
                 kp1,kp2,des1,des2 = self.slam.find_feature_points(img_now,img_prev)
-                q1,q2,good = self.slam.get_matches(kp1,kp2,des1,des2)
-                draw_params = dict(matchColor = -1, # draw matches in green color
-                 singlePointColor = None,
-                 matchesMask = None, # draw only inliers
-                 flags = 2)
-
-                img3 = cv2.drawMatches(img_now, kp1, img_prev,kp2, good ,None,**draw_params)
-                cv2.imshow("image", img3)
-                key = cv2.waitKey(2)
-        
-                # Check if the 'q' key is pressed (you can change 'q' to any key you prefer)
-                if key & 0xFF == ord('q'):
-                    cv2.destroyAllWindows()  # Close the OpenCV window
+               
                 
-                if(len(q1)>=5):
+                q1,q2,good = self.slam.get_matches(kp1,kp2,des1,des2)
+                # draw_params = dict(matchColor = -1, # draw matches in green color
+                #  singlePointColor = None,
+                #  matchesMask = None, # draw only inliers
+                #  flags = 2)
+
+                # img3 = cv2.drawMatches(img_now, kp1, img_prev,kp2, good ,None,**draw_params)
+                # cv2.imshow("image", img3)
+                # key = cv2.waitKey(2)
+        
+                # # Check if the 'q' key is pressed (you can change 'q' to any key you prefer)
+                # if key & 0xFF == ord('q'):
+                #     cv2.destroyAllWindows()  # Close the OpenCV window
+                # print("Q1 is ", q1)
+                if(len(q1)>=10):
                     pose = self.find_pose(q1, q2)
 
             # Increment index of processed images
