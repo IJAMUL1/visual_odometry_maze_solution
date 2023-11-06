@@ -435,6 +435,15 @@ class KeyboardPlayerPyGame(Player):
         # If past starting step (to avoid static) and on a set interval (self.step_size)
         if (step > self.starting_step) and ((step % self.step_size) == 0):
             fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
+            #Apply Equalized Histogram
+            fpv_gray = cv2.equalizeHist(fpv_gray)
+
+            # Apply Gaussian blur
+            fpv_gray = cv2.GaussianBlur(fpv_gray, (5, 5), 0)
+
+            # Apply edge detection
+            fpv_gray = cv2.Sobel(fpv_gray, cv2.CV_64F, 1, 1, ksize=5)
+
             alpha = 2.0
             beta = 0.0
             fpv_gray = cv2.convertScaleAbs(fpv_gray, alpha=alpha, beta=beta)
