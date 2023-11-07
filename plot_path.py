@@ -56,8 +56,11 @@ def visualize_paths_with_target(pred_path, possible_targets, html_title="", file
     fig.line("px", "py", source=source, color="green", legend_label="Paths")
 
     # print("Adding target location: {}, {}".format(target_loc[0], target_loc[1]))
-    # fig.circle(x=[target_loc[0]], y=[target_loc[1]], color="red", legend_label="Target", size=15)
-    fig.circle(x=target_x, y=target_y, color="red", legend_label="Target", size=15)
+    fig.circle(x=[possible_targets[0][0]], y=[possible_targets[0][1]], color="red", legend_label="match 1", size=10)
+    fig.circle(x=[possible_targets[1][0]], y=[possible_targets[1][1]], color="orange", legend_label="match 2", size=10)
+    fig.circle(x=[possible_targets[2][0]], y=[possible_targets[2][1]], color="pink", legend_label="match 3", size=10)
+    fig.circle(x=[possible_targets[3][0]], y=[possible_targets[3][1]], color="purple", legend_label="match 4", size=10)
+    # fig.circle(x=target_x, y=target_y, color="red", legend_label="Target", size=10)
     
     # Set the legend interaction policy
     fig.legend.click_policy = "hide"
