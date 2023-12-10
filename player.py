@@ -24,7 +24,7 @@ from SuperGluePretrainedNetwork.models.utils import frame2tensor, make_matching_
 START_STEP = 5
 STEP_SIZE = 3
 
-logging.basicConfig(filename='vis_nav_player.log', filemode='w', level=logging.INFO)
+logging.basicConfig(filename='vis_nav_player.log', filemode='w', level=logging.DEBUG)
 
 
 # SuperPoint / SuperGlue options
