@@ -6,6 +6,7 @@ import math
 import numpy as np
 import torch
 import logging
+import datetime
 
 import matplotlib.pyplot as plt
 
@@ -20,6 +21,11 @@ from plot_path import visualize_paths, visualize_paths_with_target
 
 from SuperGluePretrainedNetwork.models.matching import Matching
 from SuperGluePretrainedNetwork.models.utils import frame2tensor, make_matching_plot_fast
+
+from sklearn.cluster import KMeans
+from sklearn.neighbors import BallTree
+
+
 
 START_STEP = 5
 STEP_SIZE = 3
@@ -50,7 +56,7 @@ class KeyboardPlayerPyGame(Player):
         self.keymap = None
         self.relative_poses = [] 
         self.estimated_path = []
-        self.cur_pose = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], dtype=np.float16)
+        self.cur_pose = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], dtype=np.float32)
         super(KeyboardPlayerPyGame, self).__init__()
                 
         self.img_idx = 0  # Add a counter for image filenames
@@ -79,6 +85,8 @@ class KeyboardPlayerPyGame(Player):
         self.matching = Matching(self.super_config).eval().to(self.device)
         self.super_keys = ['keypoints', 'scores', 'descriptors']
         self.img_data_list = []
+        self.save_raw_des = []
+        self.all_database_des = []
         self.img_tensor_list = []
 
         self.prev_img_tensor = None
@@ -134,7 +142,177 @@ class KeyboardPlayerPyGame(Player):
         self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
 
     def pre_navigation(self):
-        self.find_target()
+        # self.find_target()
+        state = self.get_state()
+        if state is None:
+            return None
+        
+        self.nav_start_time = state[3]
+        self.vlad_find_target()
+    
+    # Method to compute the VLAD (Vector of Locally Aggregated Descriptors) feature
+    def get_VLAD(self, descriptors, codebook):
+        predicted_labels = codebook.predict(descriptors)
+        centroids = codebook.cluster_centers_
+        num_clusters = codebook.n_clusters
+
+        m, d = descriptors.shape
+        VLAD_feature = np.zeros([num_clusters, d])
+
+        # Compute the differences for all clusters (visual words)
+        for i in range(num_clusters):
+            # Check if there is at least one descriptor in that cluster
+            if np.sum(predicted_labels == i) > 0:
+                # Add the differences
+                VLAD_feature[i] = np.sum(descriptors[predicted_labels == i, :] - centroids[i], axis=0)
+
+        VLAD_feature = VLAD_feature.flatten()
+
+        # Power normalization, also called square-rooting normalization
+        VLAD_feature = np.sign(VLAD_feature) * np.sqrt(np.abs(VLAD_feature))
+
+        # L2 normalization
+        VLAD_feature = VLAD_feature / np.linalg.norm(VLAD_feature)
+
+        return VLAD_feature
+    
+    
+    def extract_aggregate_feature(self, des):
+        try:
+            # Read and process the image
+            self.all_database_des.extend(des)
+        except Exception as e:
+            # Handle errors when processing images
+            print(f"Error processing image")
+    
+
+    def build_vlad(self):
+        print("Building VLAD")
+
+        all_database_des = []
+        save_raw_des = []
+
+        for img_data in self.img_data_list:
+            img = img_data['image_raw']
+            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            _, des = self.slam.find_feature_points_singe_img(img_gray)
+
+            all_database_des.extend(des)
+            save_raw_des.append(des)
+
+        kmeans_all_descriptors = np.asarray([all_database_des]).squeeze()
+                
+        # Perform k-means clustering on the entire bag of descriptors
+        self.kmeans_codebook = KMeans(n_clusters=16, init='k-means++', n_init=1, verbose=1).fit(kmeans_all_descriptors)
+
+        # Initialize lists to store VLAD representations and image names from the database
+        database_VLAD = []
+        # database_poses = []
+        
+        for image_id in range(len(self.img_data_list)):
+            curr_des = save_raw_des[image_id]
+            all_descriptors = np.asarray([curr_des]).squeeze()
+            VLAD = self.get_VLAD(all_descriptors, self.kmeans_codebook)
+            database_VLAD.append(VLAD)
+            # database_poses.append(self.estimated_path[image_id])
+            # print("we are at  :",database_poses)
+            
+
+        # Convert the lists to NumPy arrays
+        database_VLAD = np.asarray(database_VLAD)
+            
+        # Build a BallTree for efficient nearest neighbor search
+        self.tree = BallTree(database_VLAD, leaf_size=60)
+        print("Done building!")
+
+  
+    def vlad_find_target(self):
+        target_list = self.get_target_images()
+        if target_list is None or len(target_list) <= 0:
+            return
+        best_match_list = [None, None, None, None]
+        print("Finding target image matches")
+               
+        # kmeans_all_descriptors = np.asarray([self.all_database_des]).squeeze()
+                
+        # # Perform k-means clustering on the entire bag of descriptors
+        # kmeans_codebook = KMeans(n_clusters=16, init='k-means++', n_init=1, verbose=1).fit(kmeans_all_descriptors)
+
+        # # Initialize lists to store VLAD representations and image names from the database
+        # database_VLAD = []
+        # # database_poses = []
+        
+        # for image_id in range(len(self.img_data_list)):
+        #     curr_des = self.save_raw_des[image_id]
+        #     all_descriptors = np.asarray([curr_des]).squeeze()
+        #     VLAD = self.get_VLAD(all_descriptors, kmeans_codebook)
+        #     database_VLAD.append(VLAD)
+        #     # database_poses.append(self.estimated_path[image_id])
+        #     # print("we are at  :",database_poses)
+            
+
+        # # Convert the lists to NumPy arrays
+        # database_VLAD = np.asarray(database_VLAD)
+            
+        # # Build a BallTree for efficient nearest neighbor search
+        # tree = BallTree(database_VLAD, leaf_size=60)   
+                
+        # Set the number of closest images to retrieve
+        num_of_imgs = 1
+        final_pose_index = []
+        
+        target_list = self.get_target_images()
+        if target_list is None or len(target_list) <= 0:
+            return
+        
+        best_match_list = [None, None, None, None]
+
+        print("Finding target image matches")
+            
+        for i, target in enumerate(target_list):
+            num_good = 0
+
+            target_gray = cv2.cvtColor(target, cv2.COLOR_BGR2GRAY)
+            # #Apply Equalized Histogram
+            # target_gray = cv2.equalizeHist(target_gray)
+
+            # # Apply Gaussian blur
+            # target_gray = cv2.GaussianBlur(target_gray, (5, 5), 0)
+
+            # # Apply edge detection
+            # target_gray = cv2.Sobel(target_gray, cv2.CV_64F, 1, 1, ksize=5)
+
+            # alpha = 2.0
+            # beta = 0.0
+            # target_gray = cv2.convertScaleAbs(target_gray, alpha=alpha, beta=beta)
+
+
+            # target_kp, target_des = self.slam.find_feature_points_singe_img(target)
+            _, target_des = self.slam.find_feature_points_singe_img(target_gray)
+
+            # img_data = self.find_feature_points_superpoint(target_gray)
+            # target_des = img_data['descriptors'][0].detach().numpy()
+
+            final_target_descriptors = np.asarray([target_des]).squeeze()
+            # Compute the VLAD representation for the query image
+            query_VLAD = self.get_VLAD(target_des, self.kmeans_codebook).reshape(1, -1)
+            
+            # Retrieve the index of the closest image(s) in the database
+            dist, index = self.tree.query(query_VLAD, num_of_imgs)
+            
+            # Index is an array of arrays of size 1
+            # Get the name of the closest image and append it to the list
+            # value_name = database_poses[index[0][0]]
+            final_pose_index.append(index[0][0])
+        
+        self.show_best_matches(final_pose_index)   
+        print(self.estimated_path[final_pose_index[0]])
+        possible_targets = [self.estimated_path[idx] for idx in final_pose_index]
+        print(possible_targets)
+        
+        visualize_paths_with_target(self.estimated_path, possible_targets, "Visual Odometry", file_out="VO.html")
+    
 
     def find_target(self):
         target_list = self.get_target_images()
@@ -231,6 +409,9 @@ class KeyboardPlayerPyGame(Player):
                     return Action.QUIT
 
                 if event.type == pygame.KEYDOWN:
+                    # If 'p' button pressed, build vlad
+                    if event.key == pygame.K_v:
+                        self.build_vlad()
                     if event.key in self.keymap:
                         self.last_act |= self.keymap[event.key]
                     else:
@@ -238,6 +419,15 @@ class KeyboardPlayerPyGame(Player):
                 if event.type == pygame.KEYUP:
                     if event.key in self.keymap:
                         self.last_act ^= self.keymap[event.key]
+
+                if Action.CHECKIN in self.last_act:
+                    state = self.get_state()
+                    if state is None:
+                        return None
+                    time_now = state[3]
+                    total_nav_time = time_now - self.nav_start_time
+                    print("Total Navigation time: {}".format(total_nav_time))
+
 
         else:
             if self.test_input_idx >= len(test_inputs):
@@ -296,59 +486,14 @@ class KeyboardPlayerPyGame(Player):
         self.show_target_images()
         
 
-    # Find pose via dead reckoning
-    # Use polar coordinates to calculate vector from previous position to current position
-    def find_pose_dead_reck(self):
-        # If moving forward or backward, r = 1 (radius)
-        if Action.FORWARD in self.last_act:
-            self.r = 1
-            self.prev_reck_act = Action.FORWARD
-        elif Action.BACKWARD in self.last_act:
-            self.r = -1
-            self.prev_reck_act = Action.BACKWARD
-        else:
-            self.r = 0
-
-        # If moving left or right, theta = 1 (angle)
-        if Action.LEFT in self.last_act:
-            self.theta = self.theta + self.tick_turn_rad
-            self.prev_reck_act = Action.LEFT
-        elif Action.RIGHT in self.last_act:
-            # self.r = 0
-            self.theta = self.theta - self.tick_turn_rad
-            self.prev_reck_act = Action.RIGHT
-        else:
-            pass
-
-        # Constrain theta between 0 and 2pi
-        if self.theta >= (2 * math.pi):
-            self.theta = self.theta - (2 * math.pi)
-        elif self.theta < 0:
-            self.theta = (2 * math.pi) + self.theta
-
-        # Calculate x,y coordinates from r,theta
-        x = self.r * math.cos(self.theta)
-        y = self.r * math.sin(self.theta)
-
-        # Update current pose (add vector to current pose)
-        self.cur_pose[0,3] = self.cur_pose[0,3] + x
-        self.cur_pose[2,3] = self.cur_pose[2,3] + y
-
-        # print("r: {}, theta: {}, x: {}, y: {}, posex: {}, posey: {}".format(self.r, self.theta, x, y, self.cur_pose[0,3], self.cur_pose[2,3]))
-
-        # Save current location
-        self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
-
-
-    # Find feature points using SuperPoint
+    # Method to find SuperPoint feature descriptors in an image
     def find_feature_points_superpoint(self, img):
         img_tensor = frame2tensor(img, self.device)
         img_data = self.matching.superpoint({'image': img_tensor})
-
-        self.img_data_list.append(img_data)
+        # self.img_data_list.append(img_data)
         self.img_tensor_list.append(img_tensor)
-
-        return img_data['keypoints'], img_data['descriptors']
+        return img_data
+        # return img_data['keypoints'][0].detach().numpy(), img_data['descriptors'][0].detach().numpy()
 
 
     # Find feature matches using SuperGlue
@@ -373,14 +518,18 @@ class KeyboardPlayerPyGame(Player):
         q1 = np.array(mkpts0)
         q2 = np.array(mkpts1)
         
-
         return q1, q2
 
 
     # Find pose
     def find_pose(self, q1, q2):
         # Get pose from SLAM class
+        time_start = datetime.datetime.now()
         relative_pose  = self.slam.get_pose(q1, q2)
+        time_get_pose = datetime.datetime.now()
+        time_diff = time_get_pose - time_start
+        # print("Time taken (get_pose): {}".format(time_diff))
+
         if Action.LEFT not in self.last_act_set and Action.RIGHT not in self.last_act_set:
             # relative_pose[:,:3] = 1
             relative_pose[:3,:3] = np.eye(3)
@@ -400,31 +549,8 @@ class KeyboardPlayerPyGame(Player):
             relative_pose[:3,:3] = self.prev_transform[:3,:3]
 
         # Calculate new pose from relative pose (transformation matrix)
-        self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose))
+        self.cur_pose = np.matmul(self.cur_pose, np.linalg.inv(relative_pose), dtype=np.float32)
         
-        # print("curr pose:\n{}".format(cur_pose))
-
-        # rotation_matrix = self.cur_pose[:3, :3]
-
-        # Calculate the rotation about the y-axis (pitch) using the arctan2 function
-        # pitch = np.arctan2(rotation_matrix[2, 0], np.sqrt(rotation_matrix[0, 0] ** 2 + rotation_matrix[1, 0] ** 2))
-        
-        # Calculate the rotation about the y-axis (pitch) in radians using the arctan2 function
-        # Convert to degrees if needed
-        # yaw = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
-        # yaw_degrees = np.degrees(yaw)
-        # turned_angle = self.prev_angle - yaw_degrees
-        # # turned_angle = self.prev_angle - pitch_degrees
-        # self.cum_turned_angle += turned_angle
-        
-        # print("cum angle", self.cum_turned_angle)
-        # print("cum angle", self.cum_turned_angle)
-        # print("cum angle", self.cum_turned_angle)
-        # print("cum angle", self.cum_turned_angle)
-        
-        
-        # self.prev_angle = yaw_degrees       
-        # self.prev_angle = pitch_degrees
         # If not moving forward or backward, ignore the translation vector
         # Translation vector seems to be normalized to 1 from decomposeEssentialMat()
         # See: https://answers.opencv.org/question/66839/units-of-rotation-and-translation-from-essential-matrix/
@@ -434,21 +560,9 @@ class KeyboardPlayerPyGame(Player):
         if (Action.LEFT not in self.last_act_set) and (Action.RIGHT not in self.last_act_set):
             self.cur_pose[:3,:3] = prev_rot
 
-        # print(relative_pose)
-        # print("pre:  {} {} {} {}".format(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1]))
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        print(self.cur_pose[0,3],self.cur_pose[2,3],self.cur_pose[0,3]-prev_xz[0],self.cur_pose[2,3]-prev_xz[1])
-        
-        
-        
         x_diff = self.cur_pose[0,3]-prev_xz[0]
         y_diff = self.cur_pose[2,3]-prev_xz[1]
-        
+
         if abs(x_diff) > abs(y_diff):
         # If the difference on the x-axis is greater, only update the x-axis position
             self.cur_pose[2, 3] = prev_xz[1]
@@ -456,13 +570,16 @@ class KeyboardPlayerPyGame(Player):
         # If the difference on the y-axis is greater or equal, only update the y-axis position
             self.cur_pose[0, 3] = prev_xz[0]
             
-        # print("post: {} {} {} {}".format(self.cur_pose[0,3], self.cur_pose[2,3], x_diff, y_diff))
         # Save current location
         self.estimated_path.append((self.cur_pose[0,3], self.cur_pose[2,3]))
         # print(self.estimate)
         self.action_list.append(self.last_act_set)
 
         self.prev_transform = relative_pose
+
+        time_other = datetime.datetime.now()
+        time_diff = time_other - time_get_pose
+        # print("Time taken (other stuff): {}".format(time_diff))
 
         return self.cur_pose
 
@@ -478,13 +595,28 @@ class KeyboardPlayerPyGame(Player):
         if self.last_act == Action.IDLE:
             return True
         
-        
+        time_beg = datetime.datetime.now()
         # If past starting step (to avoid static) and on a set interval (self.step_size)
         if (step > self.starting_step) and ((step % self.step_size) == 0):
             fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
             
             # Find feature points
-            keypts, desc = self.find_feature_points_superpoint(fpv_gray)
+            # keypts, desc = self.find_feature_points_superpoint(fpv_gray)
+            img_data = self.find_feature_points_superpoint(fpv_gray)
+            img_data['image_raw'] = fpv
+
+            time_superpoint = datetime.datetime.now()
+            time_diff = time_superpoint - time_beg
+            print("Time taken (feature extraction): {}".format(time_diff))
+
+            self.img_data_list.append(img_data)
+
+            kpts, desc = img_data['keypoints'][0].detach().numpy(), img_data['descriptors'][0].detach().numpy()
+
+            # self.img_data_list.append({'image':fpv_gray, 'keypoints':kpts, 'descriptors':desc, 'image_raw':fpv})
+
+            self.save_raw_des.append(desc)
+            self.extract_aggregate_feature(desc)
 
             # If more than one image processed (index >= 1)
             if self.img_idx >= 1:
@@ -492,26 +624,31 @@ class KeyboardPlayerPyGame(Player):
                 # Find feature matches between prev processed image and current image
                 q1, q2 = self.find_feature_matches_superglue(self.img_idx-1, self.img_idx)
 
+                time_superglue = datetime.datetime.now()
+                time_diff = time_superglue - time_superpoint
+                print("Time taken (feature matching): {}".format(time_diff))
+
+                # self.img_data_list.append({'image':fpv_gray, 'keypoints':keypts, 'descriptors':desc, 'image_raw':fpv})
+
                 pose = self.find_pose(q1, q2)
+
+                time_pose = datetime.datetime.now()
+                time_diff = time_pose - time_superglue
+                print("Time taken (pose): {}".format(time_diff))
+
+                time_diff = time_pose - time_beg
+                print("Time taken (total): {}".format(time_diff))
 
             # Increment index of processed images
             self.img_idx += 1
 
+            self.last_act_set = Action.IDLE
+        else:
+            return False
+
         return True
     
     
-    # Find feature points using SuperPoint___delete this soon
-    def find_feature_points_superpoint(self, img):
-        img_tensor = frame2tensor(img, self.device)
-        img_data = self.matching.superpoint({'image': img_tensor})
-
-        self.img_data_list.append(img_data)
-        self.img_tensor_list.append(img_tensor)
-
-        return img_data['keypoints'], img_data['descriptors']
-    
-    
-     
     # Process image
     def process_image_orb(self, fpv):
         state = self.get_state()
@@ -526,6 +663,7 @@ class KeyboardPlayerPyGame(Player):
         
         # If past starting step (to avoid static) and on a set interval (self.step_size)
         if (step > self.starting_step) and ((step % self.step_size) == 0):
+            time_beg = datetime.datetime.now()
             fpv_gray = cv2.cvtColor(fpv, cv2.COLOR_BGR2GRAY)
             #Apply Equalized Histogram
             fpv_gray = cv2.equalizeHist(fpv_gray)
@@ -541,11 +679,15 @@ class KeyboardPlayerPyGame(Player):
             fpv_gray = cv2.convertScaleAbs(fpv_gray, alpha=alpha, beta=beta)
             
             kp, des = self.slam.find_feature_points_singe_img(fpv_gray)
+            self.save_raw_des.append(des)
+            self.extract_aggregate_feature(des)
 
             self.img_data_list.append({'image':fpv_gray, 'keypoints':kp, 'descriptors':des, 'image_raw':fpv})
-            # self.img_data_list[self.img_idx]['keypoints'] = kp
-            # self.img_data_list[self.img_idx]['descriptors'] = des
-            
+
+            time_extract = datetime.datetime.now()
+            time_diff = time_extract - time_beg
+            # print("Time taken (feature extraction): {}".format(time_diff))
+
             # If more than one image processed (index >= 1)
             if self.img_idx >= 1:
 
@@ -553,11 +695,6 @@ class KeyboardPlayerPyGame(Player):
                 # Find feature points
                 img_now = self.img_data_list[self.img_idx]['image']
                 img_prev = self.img_data_list[self.img_idx-1]['image']
-                # kp1,kp2,des1,des2 = self.slam.find_feature_points(img_now,img_prev)
-                # kp1, des1 = self.slam.find_feature_points_singe_img(img_)
-                # self.img_data_list[self.img_idx]['keypoints'] = kp2
-                # self.img_data_list[self.img_idx]['descriptors'] = des2
-                # q1,q2,good = self.slam.get_matches(kp1,kp2,des1,des2)
                 kp_prev = self.img_data_list[self.img_idx-1]['keypoints']
                 des_prev = self.img_data_list[self.img_idx-1]['descriptors']
                 # q1, q2, good = self.slam.get_matches(kp_prev, kp, des_prev, des)
@@ -577,8 +714,19 @@ class KeyboardPlayerPyGame(Player):
                 # if key & 0xFF == ord('q'):
                 #     cv2.destroyAllWindows()  # Close the OpenCV window
                 
+                time_match = datetime.datetime.now()
+                time_diff = time_match - time_extract
+                # print("Time taken (feature matching): {}".format(time_diff))
+
                 if(len(q1)>=8):
                     pose = self.find_pose(q1, q2)
+                    time_pose = datetime.datetime.now()
+                    time_diff = time_pose - time_match
+                    # print("Time taken (pose): {}".format(time_diff))
+                    time_total = time_pose - time_beg
+                    # print("Time taken (total): {}".format(time_total))
+                    
+                    
 
             # Increment index of processed images
             self.img_idx += 1
@@ -586,11 +734,6 @@ class KeyboardPlayerPyGame(Player):
             self.last_act_set = Action.IDLE
         else:
             return False
-
-
-        # if step == 144:
-        #     cv2.imshow('144', fpv)
-        #     cv2.waitKey(0)
 
         return True
 
@@ -606,12 +749,6 @@ class KeyboardPlayerPyGame(Player):
         if self.screen is None:
             h, w, _ = fpv.shape
             self.screen = pygame.display.set_mode((w, h))
-       
-        # Find pose via dead reckoning
-        # self.find_pose_dead_reck()
-
-        # Process image: find feature points, match feature points, get pose
-        # ret = self.process_image_super_glue(fpv)
         
         state = self.get_state()
         
@@ -622,18 +759,11 @@ class KeyboardPlayerPyGame(Player):
                 
         if self.exploration_status and step == Phase.EXPLORATION:
             ret = self.process_image_orb(fpv)
+            # ret = self.process_image_super_glue(fpv)
+
             # If image wasn't processed, add last action to set
             if not ret:
-                self.last_act_set |= self.last_act
-
-
-        # ret = self.process_image_orb(fpv)
-
-        # # If image wasn't processed, add last action to set
-        # if not ret:
-        #     self.last_act_set |= self.last_act
-        
-    
+                self.last_act_set |= self.last_act    
 
         def convert_opencv_img_to_pygame(opencv_image):
             """
