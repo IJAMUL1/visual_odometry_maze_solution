@@ -7,23 +7,19 @@
 
 ## **Overview** 
 
-* Expand on your project's goals and the problem it solves.
-* Highlight key features and what makes your project unique.
+* This project involves a multi-modal problem that requires multiple computer vision techniques with fundamental robotics and SLAM concepts. At a very high level, we need to explore a maze built in Pygame while saving information (in essence, remembering the maze), then in the navigation phase we reset to the beginning of the maze and must locate and navigate to a target as quickly as possible, based only on images of the target location.
 
 ## **Demo**
 
 * **Demo Video:** *(([https://drive.google.com/file/d/1GZvM6IB3s34Q8Kr_OcSHLJ1U-ZD_yAf9/view?usp=drive_link](https://drive.google.com/file/d/10ZKu7E_6FD53SiSraNu6lZKTruy4-NvJ/view?usp=sharing)))*
    * See link to final presentation file *((https://docs.google.com/presentation/d/1q1fmdLSKATPFoNHQhgFF25TS9gMwMKQr/edit?usp=drive_link&ouid=100678161242482663381&rtpof=true&sd=true))*
 
-* **Screenshots:**
-   *  [Image 1 Caption](path/to/image1.png)
-   *  [Image 2 Caption](path/to/image2.jpg)
-
 ## **Installation Requirements**
 
 **Prerequisites**
 
-* List all prerequisites (Python version, specific operating systems, other external software)
+* List all prerequisites
+
 
 **Installation Guide**
 
