@@ -19,10 +19,12 @@
 Follow these steps to set up the project environment:
 
 **Prerequisites**
+    ```bash
+    Jinja2 ==2.11.3
+    bokeh==2.0.1
+    markupsafe==2.0.1
+    ```
 
-* Jinja2 ==2.11.3
-* bokeh==2.0.1
-* markupsafe==2.0.1
 
 
 1. **Clone this repository:**
@@ -52,7 +54,7 @@ Follow these steps to set up the project environment:
 5. **Clone Superglue Repo**
     Clone the SuperGluePreTrainedNetwork
    ```bash
-    git clone [https://github.com/ai4ce/vis_nav_player.git](https://github.com/magicleap/SuperGluePretrainedNetwork.git)
+    git clone https://github.com/magicleap/SuperGluePretrainedNetwork.git
     ```
 6. **Installation Complete:**
     Your environment is now set up and ready to use.
