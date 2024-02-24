@@ -29,4 +29,4 @@
   git clone https://github.com/ai4ce/vis_nav_player.git
   cd midterm_rp
   conda env create -f environment.yml
-  conda activate game
+  conda activate game```
