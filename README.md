@@ -14,21 +14,21 @@
 * **Demo Video:** *(([https://drive.google.com/file/d/1GZvM6IB3s34Q8Kr_OcSHLJ1U-ZD_yAf9/view?usp=drive_link](https://drive.google.com/file/d/10ZKu7E_6FD53SiSraNu6lZKTruy4-NvJ/view?usp=sharing)))*
    * See link to final presentation file *((https://docs.google.com/presentation/d/1q1fmdLSKATPFoNHQhgFF25TS9gMwMKQr/edit?usp=drive_link&ouid=100678161242482663381&rtpof=true&sd=true))*
 
-## **Installation Requirements**
-
-**Prerequisites**
-
-* List all prerequisites
-
-
 ## Installation Guide
 
 Follow these steps to set up the project environment:
 
+**Prerequisites**
+
+* Jinja2 ==2.11.3
+* bokeh==2.0.1
+* markupsafe==2.0.1
+
+
 1. **Clone this repository:**
     ```bash
-    git clone https://github.com/ai4ce/vis_nav_player.git
-    cd vis_nav_player
+    git clone [https://github.com/ai4ce/vis_nav_player.git](https://github.com/IJAMUL1/visual_odometry_maze_solution.git)
+    cd visual_odometry_maze_solution
     ```
 
 2. **Update Conda:**
@@ -48,6 +48,9 @@ Follow these steps to set up the project environment:
     ```bash
     conda activate game
     ```
+
+6. **Clone Superglue Repo**
+    Clone the 
 
 5. **Installation Complete:**
     Your environment is now set up and ready to use.
