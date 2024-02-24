@@ -23,6 +23,7 @@ Follow these steps to set up the project environment:
     Jinja2 ==2.11.3
     bokeh==2.0.1
     markupsafe==2.0.1
+    pytorch
     ```
 
 
