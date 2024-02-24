@@ -2,7 +2,7 @@
 
 *Enhancing mobile robots with autonomous path mapping and target image finding in a maze environment using Monocular Visual Odometry, VLAD, and Superglue Pretrain Network.*
 
-[![Demo Video Thumbnail]([path/to/thumbnail.png](https://github.com/IJAMUL1/visual_odometry_maze_solution/blob/main/sample_demos/VO_image.png))]([https://link-to-your-demo-video](https://drive.google.com/file/d/10ZKu7E_6FD53SiSraNu6lZKTruy4-NvJ/view?usp=drive_link))
+[![Demo Video Thumbnail]([https://github.com/IJAMUL1/visual_odometry_maze_solution/blob/main/sample_demos/VO_image.png](https://github.com/IJAMUL1/visual_odometry_maze_solution/blob/main/sample_demos/VO_image.png))]([https://link-to-your-demo-video](https://drive.google.com/file/d/10ZKu7E_6FD53SiSraNu6lZKTruy4-NvJ/view?usp=drive_link))
 
 ## **Overview** 
 
