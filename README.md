@@ -1,6 +1,6 @@
 # **Visual Odometry Maze Solution** 
 
-*A concise and impactful one-line description of your project's purpose.*
+*This project utilizes monocular visual odometry, VLAD and Superglue Pretrain Network for path mapping and target imagine finding of a robot in a maze envronment.*
 
 [![Demo Video Thumbnail](path/to/thumbnail.png)](https://link-to-your-demo-video)
 
