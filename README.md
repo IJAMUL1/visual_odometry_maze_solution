@@ -1,4 +1,4 @@
-# **[Visual Odometry Maze Solution]** 
+# **Visual Odometry Maze Solution** 
 
 *A concise and impactful one-line description of your project's purpose.*
 
