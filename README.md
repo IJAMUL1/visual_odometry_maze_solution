@@ -21,12 +21,34 @@
 * List all prerequisites
 
 
-**Installation Guide**
+## Installation Guide
+
+Follow these steps to set up the project environment:
 
 1. **Clone this repository:**
-   ```bash
-  conda update conda
-  git clone https://github.com/ai4ce/vis_nav_player.git
-  cd midterm_rp
-  conda env create -f environment.yml
-  conda activate game```
+    ```bash
+    git clone https://github.com/ai4ce/vis_nav_player.git
+    cd vis_nav_player
+    ```
+
+2. **Update Conda:**
+    Ensure your Conda installation is up-to-date.
+    ```bash
+    conda update conda
+    ```
+
+3. **Create Conda Environment:**
+    Create a new Conda environment using the provided YAML file.
+    ```bash
+    conda env create -f environment.yml
+    ```
+
+4. **Activate the Environment:**
+    Activate the newly created Conda environment.
+    ```bash
+    conda activate game
+    ```
+
+5. **Installation Complete:**
+    Your environment is now set up and ready to use.
+
