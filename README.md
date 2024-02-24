@@ -27,7 +27,7 @@ Follow these steps to set up the project environment:
 
 1. **Clone this repository:**
     ```bash
-    git clone [https://github.com/ai4ce/vis_nav_player.git](https://github.com/IJAMUL1/visual_odometry_maze_solution.git)
+    git clone https://github.com/IJAMUL1/visual_odometry_maze_solution.git
     cd visual_odometry_maze_solution
     ```
 
@@ -49,12 +49,11 @@ Follow these steps to set up the project environment:
     conda activate game
     ```
 
-6. **Clone Superglue Repo**
+5. **Clone Superglue Repo**
     Clone the SuperGluePreTrainedNetwork
    ```bash
-  git clone [https://github.com/ai4ce/vis_nav_player.git](https://github.com/magicleap/SuperGluePretrainedNetwork.git)
-   ```
-
-5. **Installation Complete:**
+    git clone [https://github.com/ai4ce/vis_nav_player.git](https://github.com/magicleap/SuperGluePretrainedNetwork.git)
+    ```
+6. **Installation Complete:**
     Your environment is now set up and ready to use.
 
