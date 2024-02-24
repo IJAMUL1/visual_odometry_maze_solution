@@ -7,7 +7,7 @@
 
 ## **Overview** 
 
-* This project involves a multi-modal problem that requires multiple computer vision techniques with fundamental robotics and SLAM concepts. At a very high level, we need to explore a maze built in Pygame while saving information (in essence, remembering the maze), then in the navigation phase we reset to the beginning of the maze and must locate and navigate to a target as quickly as possible, based only on images of the target location. Methods utilized include VLAD, Orb feature detection, Super glue pretrained network and traingulation (for pose estimation).
+* This project tackles a multi-modal challenge within a Pygame maze environment, focusing on autonomous robot navigation.  The solution combines cutting-edge computer vision techniques alongside fundamental robotics principles. It involves exploring the maze, building a representation of the environment (a form of memory), and then efficiently navigating to a target location based solely on visual input. Key methods employed include VLAD (for image representation and localization), ORB feature detection (for robust image matching), a pretrained SuperGlue network (for advanced feature correspondence), and triangulation (for determining the robot's position and orientation).
 
 ## **Demo**
 
