@@ -13,7 +13,7 @@
 ## **Demo**
 
 * **Demo Video:** *(([https://drive.google.com/file/d/1GZvM6IB3s34Q8Kr_OcSHLJ1U-ZD_yAf9/view?usp=drive_link](https://drive.google.com/file/d/10ZKu7E_6FD53SiSraNu6lZKTruy4-NvJ/view?usp=sharing)))*
-   * Short walkthrough showcasing your project in action.
+   * See link to final presentation file *((https://docs.google.com/presentation/d/1q1fmdLSKATPFoNHQhgFF25TS9gMwMKQr/edit?usp=drive_link&ouid=100678161242482663381&rtpof=true&sd=true))*
 
 * **Screenshots:**
    *  [Image 1 Caption](path/to/image1.png)
