@@ -50,7 +50,10 @@ Follow these steps to set up the project environment:
     ```
 
 6. **Clone Superglue Repo**
-    Clone the 
+    Clone the SuperGluePreTrainedNetwork
+   ```bash
+  git clone [https://github.com/ai4ce/vis_nav_player.git](https://github.com/magicleap/SuperGluePretrainedNetwork.git)
+   ```
 
 5. **Installation Complete:**
     Your environment is now set up and ready to use.
